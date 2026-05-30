@@ -19,8 +19,12 @@ export function runWizard(): Promise<LLMConfig> {
   });
 }
 
-function WizardApp({ onDone }: { onDone: (c: LLMConfig) => void }) {
+export function WizardApp({ onDone, onClose }: {
+  onDone: (c: LLMConfig) => void;
+  onClose?: () => void;
+}) {
   const { exit } = useApp();
+  const leave = onClose ?? (() => exit());
   const [step, setStep] = React.useState<Step>('welcome');
   const [history, setHistory] = React.useState<Step[]>([]);
   const [cursor, setCursor] = React.useState(0);
@@ -86,7 +90,7 @@ function WizardApp({ onDone }: { onDone: (c: LLMConfig) => void }) {
 
   useInput((ch, key) => {
     if (key.escape) {
-      if (step === 'welcome') { exit(); return; }
+      if (step === 'welcome') { leave(); return; }
       back();
       return;
     }
@@ -94,7 +98,7 @@ function WizardApp({ onDone }: { onDone: (c: LLMConfig) => void }) {
     if (step === 'welcome' || step === 'done') {
       if (key.return) {
         if (step === 'welcome') go('left-provider');
-        else exit();
+        else leave();
       }
       return;
     }

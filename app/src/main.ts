@@ -2,11 +2,11 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import React from 'react';
 import { render, Box, Text, useApp, useInput, useStdout } from 'ink';
-import { loadConfig, saveConfig, type LLMConfig } from './llm.js';
+import { loadConfig, type LLMConfig } from './llm.js';
 import type { ChatMessage } from './llm-client.js';
 import * as orchestrator from './frontal-orchestrator/index.js';
 import { enrich, healthCheck, isBrainOnline } from './brain-bridge.js';
-import { runWizard } from './wizard.js';
+import { runWizard, WizardApp } from './wizard.js';
 import { createServer } from './api/server.js';
 
 const require = createRequire(import.meta.url);
@@ -43,6 +43,52 @@ class BrainLauncher {
   isReady() { return this.ready; }
 }
 
+// ── App Shell (mode switcher) ─────────────────────────────────────
+
+function AppShell({ config: initialConfig, projectRoot }: {
+  config: LLMConfig;
+  projectRoot: string;
+}) {
+  const [mode, setMode] = React.useState<'chat' | 'wizard'>('chat');
+  const [config, setConfig] = React.useState(initialConfig);
+  const [chatKey, setChatKey] = React.useState(0);
+  const [brainStatus, setBrainStatus] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    const brain = new BrainLauncher();
+    brain.start(projectRoot).then((ok) => setBrainStatus(ok));
+    return () => { brain.stop(); };
+  }, []);
+
+  if (mode === 'wizard') {
+    return React.createElement(WizardApp, {
+      onDone: (c: LLMConfig) => {
+        setConfig(c);
+        setChatKey((k) => k + 1);
+        setMode('chat');
+      },
+      onClose: () => setMode('chat'),
+    });
+  }
+
+  const leftLabel = `${config.leftBrain.provider}/${config.leftBrain.model}`;
+  const diffBrain = config.rightBrain.provider !== config.leftBrain.provider
+    || config.rightBrain.model !== config.leftBrain.model;
+  const rightLabel = diffBrain
+    ? `${config.rightBrain.provider}/${config.rightBrain.model}` : '';
+  const modelLabel = rightLabel ? `${leftLabel} | ${rightLabel}` : leftLabel;
+
+  return React.createElement(ChatUI, {
+    key: chatKey,
+    config,
+    modelLabel,
+    brainStatus,
+    diffBrain,
+    rightLabel,
+    onOpenConfig: () => setMode('wizard'),
+  });
+}
+
 // ── TUI ───────────────────────────────────────────────────────────
 
 interface AppState {
@@ -53,17 +99,48 @@ interface AppState {
   chatHistory: ChatMessage[];
 }
 
-function ChatUI({ initialState, config }: {
-  initialState: AppState;
+function ChatUI({ config, modelLabel, brainStatus, diffBrain, rightLabel, onOpenConfig }: {
   config: LLMConfig;
+  modelLabel: string;
+  brainStatus: boolean | null;
+  diffBrain: boolean;
+  rightLabel: string;
+  onOpenConfig: () => void;
 }) {
   const { exit } = useApp();
   const { stdout } = useStdout();
-  const [state, setStateRaw] = React.useState(initialState);
+  const [state, setStateRaw] = React.useState<AppState>({
+    messages: [],
+    input: '',
+    status: '',
+    modelLabel,
+    chatHistory: [],
+  });
 
   const update = (partial: Partial<AppState>) => {
     setStateRaw((prev) => ({ ...prev, ...partial }));
   };
+
+  // Boot messages — show model info immediately
+  React.useEffect(() => {
+    const msgs: Array<{ role: string; content: string }> = [];
+    msgs.push({ role: 'system', content: `Left brain:  ${config.leftBrain.provider}/${config.leftBrain.model}` });
+    if (diffBrain) {
+      msgs.push({ role: 'system', content: `Right brain: ${rightLabel}` });
+    }
+    update({ messages: msgs });
+  }, []);
+
+  // Brain status message — show when resolved
+  React.useEffect(() => {
+    if (brainStatus === null) return;
+    setStateRaw((prev) => {
+      const messages = [...prev.messages];
+      messages.push({ role: 'system', content: brainStatus ? 'Brain online' : 'Standalone mode (brain offline)' });
+      messages.push({ role: 'assistant', content: "Hello! I'm Odysseus. Both hemispheres are ready." });
+      return { ...prev, messages };
+    });
+  }, [brainStatus]);
 
   useInput((ch, key) => {
     if (key.escape) { exit(); return; }
@@ -158,11 +235,8 @@ function ChatUI({ initialState, config }: {
         addMsg('system', '/model /config /status /clear /init /help /exit');
         break;
       case 'config':
-        addMsg('system', 'Re-running setup wizard...');
-        update({ messages: [...state.messages] });
-        exit();
+        onOpenConfig();
         return;
-        break;
       case 'init':
         exit();
         return;
@@ -202,38 +276,7 @@ async function main() {
   }
 
   const projectRoot = findProjectRoot();
-  const brain = new BrainLauncher();
-  const leftLabel = `${config.leftBrain.provider}/${config.leftBrain.model}`;
-  const rightLabel = config.rightBrain.provider !== config.leftBrain.provider
-    ? `${config.rightBrain.provider}/${config.rightBrain.model}` : '';
-  const modelLabel = rightLabel ? `${leftLabel} | ${rightLabel}` : leftLabel;
-
-  const initialState: AppState = {
-    messages: [],
-    input: '',
-    status: 'launching brain...',
-    modelLabel,
-    chatHistory: [],
-  };
-
-  render(React.createElement(ChatUI, { initialState, config }));
-
-  addMsg(initialState, 'system', `Left brain:  ${leftLabel}`);
-  if (rightLabel) addMsg(initialState, 'system', `Right brain: ${rightLabel}`);
-  addMsg(initialState, 'system', 'Starting Elixir brain...');
-
-  const connected = await brain.start(projectRoot);
-  if (connected) {
-    addMsg(initialState, 'system', 'Brain online');
-  } else {
-    addMsg(initialState, 'system', 'Standalone mode (brain offline)');
-  }
-
-  addMsg(initialState, 'assistant', "Hello! I'm Odysseus. Both hemispheres are ready.");
-
-  function addMsg(state: AppState, role: string, content: string) {
-    state.messages.push({ role, content });
-  }
+  render(React.createElement(AppShell, { config, projectRoot }));
 }
 
 function findProjectRoot(): string {
