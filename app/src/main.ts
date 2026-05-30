@@ -1,69 +1,29 @@
-import { spawn, ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import React from 'react';
 import { render, Box, Text, useApp, useInput, useStdout } from 'ink';
 import { loadConfig, type LLMConfig } from './llm.js';
 import type { ChatMessage } from './llm-client.js';
 import * as orchestrator from './frontal-orchestrator/index.js';
-import { enrich, healthCheck, isBrainOnline } from './brain-bridge.js';
+import { healthCheck, isBrainOnline } from './brain-bridge.js';
 import { runWizard, WizardApp } from './wizard.js';
 import { createServer } from './api/server.js';
 
 const require = createRequire(import.meta.url);
 
-// ── Brain launcher ────────────────────────────────────────────────
+// ── App Shell ─────────────────────────────────────────────────────
 
-class BrainLauncher {
-  private proc: ChildProcess | null = null;
-  private ready = false;
-
-  async start(projectRoot: string): Promise<boolean> {
-    if (await healthCheck()) { this.ready = true; return true; }
-
-    return new Promise((resolve) => {
-      this.proc = spawn('mix', ['run', '--no-halt'], {
-        cwd: `${projectRoot}/neural`,
-        stdio: 'pipe',
-        env: { ...process.env, MIX_ENV: 'dev' },
-      });
-
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        if (await healthCheck()) {
-          clearInterval(poll); this.ready = true; resolve(true);
-        } else if (attempts > 30) {
-          clearInterval(poll); resolve(false);
-        }
-      }, 1000);
-    });
-  }
-
-  stop() { this.proc?.kill('SIGTERM'); this.proc = null; }
-  isReady() { return this.ready; }
-}
-
-// ── App Shell (mode switcher) ─────────────────────────────────────
-
-function AppShell({ config: initialConfig, projectRoot }: {
+function AppShell({ config, brainReady }: {
   config: LLMConfig;
-  projectRoot: string;
+  brainReady: boolean;
 }) {
   const [mode, setMode] = React.useState<'chat' | 'wizard'>('chat');
-  const [config, setConfig] = React.useState(initialConfig);
+  const [currentConfig, setCurrentConfig] = React.useState(config);
   const [chatKey, setChatKey] = React.useState(0);
-  const [brainStatus, setBrainStatus] = React.useState<boolean | null>(null);
-
-  React.useEffect(() => {
-    const brain = new BrainLauncher();
-    brain.start(projectRoot).then((ok) => setBrainStatus(ok));
-    return () => { brain.stop(); };
-  }, []);
 
   if (mode === 'wizard') {
     return React.createElement(WizardApp, {
       onDone: (c: LLMConfig) => {
-        setConfig(c);
+        setCurrentConfig(c);
         setChatKey((k) => k + 1);
         setMode('chat');
       },
@@ -71,20 +31,13 @@ function AppShell({ config: initialConfig, projectRoot }: {
     });
   }
 
-  const leftLabel = `${config.leftBrain.provider}/${config.leftBrain.model}`;
-  const diffBrain = config.rightBrain.provider !== config.leftBrain.provider
-    || config.rightBrain.model !== config.leftBrain.model;
-  const rightLabel = diffBrain
-    ? `${config.rightBrain.provider}/${config.rightBrain.model}` : '';
-  const modelLabel = rightLabel ? `${leftLabel} | ${rightLabel}` : leftLabel;
+  const leftLabel = `${currentConfig.leftBrain.provider}/${currentConfig.leftBrain.model}`;
 
   return React.createElement(ChatUI, {
     key: chatKey,
-    config,
-    modelLabel,
-    brainStatus,
-    diffBrain,
-    rightLabel,
+    config: currentConfig,
+    brainReady,
+    modelLabel: leftLabel,
     onOpenConfig: () => setMode('wizard'),
   });
 }
@@ -99,12 +52,10 @@ interface AppState {
   chatHistory: ChatMessage[];
 }
 
-function ChatUI({ config, modelLabel, brainStatus, diffBrain, rightLabel, onOpenConfig }: {
+function ChatUI({ config, brainReady, modelLabel, onOpenConfig }: {
   config: LLMConfig;
+  brainReady: boolean;
   modelLabel: string;
-  brainStatus: boolean | null;
-  diffBrain: boolean;
-  rightLabel: string;
   onOpenConfig: () => void;
 }) {
   const { exit } = useApp();
@@ -121,26 +72,14 @@ function ChatUI({ config, modelLabel, brainStatus, diffBrain, rightLabel, onOpen
     setStateRaw((prev) => ({ ...prev, ...partial }));
   };
 
-  // Boot messages — show model info immediately
+  // Boot messages
   React.useEffect(() => {
     const msgs: Array<{ role: string; content: string }> = [];
-    msgs.push({ role: 'system', content: `Left brain:  ${config.leftBrain.provider}/${config.leftBrain.model}` });
-    if (diffBrain) {
-      msgs.push({ role: 'system', content: `Right brain: ${rightLabel}` });
-    }
+    msgs.push({ role: 'system', content: `Model: ${modelLabel}` });
+    msgs.push({ role: 'system', content: brainReady ? 'Brain online' : 'Brain starting...' });
+    msgs.push({ role: 'assistant', content: "Hello! I'm Odysseus." });
     update({ messages: msgs });
   }, []);
-
-  // Brain status message — show when resolved
-  React.useEffect(() => {
-    if (brainStatus === null) return;
-    setStateRaw((prev) => {
-      const messages = [...prev.messages];
-      messages.push({ role: 'system', content: brainStatus ? 'Brain online' : 'Standalone mode (brain offline)' });
-      messages.push({ role: 'assistant', content: "Hello! I'm Odysseus. Both hemispheres are ready." });
-      return { ...prev, messages };
-    });
-  }, [brainStatus]);
 
   useInput((ch, key) => {
     if (key.escape) { exit(); return; }
@@ -169,7 +108,7 @@ function ChatUI({ config, modelLabel, brainStatus, diffBrain, rightLabel, onOpen
       React.createElement(Text, { bold: true, color: 'cyan' }, 'Odysseus v2'),
       React.createElement(Text, { color: 'gray' }, ' — '),
       React.createElement(Text, { color: isBrainOnline() ? 'green' : 'yellow' },
-        isBrainOnline() ? 'brain' : 'standalone'),
+        isBrainOnline() ? 'brain' : 'connecting'),
       React.createElement(Text, { color: 'gray' }, ' — '),
       React.createElement(Text, { color: 'magenta' }, state.modelLabel),
       state.status
@@ -214,17 +153,7 @@ function ChatUI({ config, modelLabel, brainStatus, diffBrain, rightLabel, onOpen
     const command = cmd.split(' ')[0];
     switch (command) {
       case 'model':
-        addMsg('system', `Left:  ${config.leftBrain.provider}/${config.leftBrain.model}\nRight: ${config.rightBrain.provider}/${config.rightBrain.model}`);
-        break;
-      case 'status':
-        if (isBrainOnline()) {
-          enrich('status').then(() => {
-            addMsg('system', `Brain: online | Left: ${config.leftBrain.provider}/${config.leftBrain.model} | Right: ${config.rightBrain.provider}/${config.rightBrain.model}`);
-            update({ messages: [...state.messages] });
-          });
-        } else {
-          addMsg('system', `Brain: offline | Models: ${config.leftBrain.provider}/${config.leftBrain.model}`);
-        }
+        addMsg('system', `Model: ${config.leftBrain.provider}/${config.leftBrain.model}`);
         break;
       case 'clear':
         state.chatHistory = [];
@@ -232,13 +161,10 @@ function ChatUI({ config, modelLabel, brainStatus, diffBrain, rightLabel, onOpen
         update({ messages: [], chatHistory: [] });
         return;
       case 'help':
-        addMsg('system', '/model /config /status /clear /init /help /exit');
+        addMsg('system', '/model /config /clear /help /exit');
         break;
       case 'config':
         onOpenConfig();
-        return;
-      case 'init':
-        exit();
         return;
       case 'exit':
         exit();
@@ -275,19 +201,24 @@ async function main() {
     return;
   }
 
-  const projectRoot = findProjectRoot();
-  render(React.createElement(AppShell, { config, projectRoot }));
+  // Wait for brain to be ready
+  console.log('Connecting to brain...');
+  const brainReady = await waitForBrain();
+  if (!brainReady) {
+    console.error('Brain unavailable. Start Elixir brain first:');
+    console.error('  cd neural && mix run --no-halt');
+    process.exit(1);
+  }
+
+  render(React.createElement(AppShell, { config, brainReady }));
 }
 
-function findProjectRoot(): string {
-  let dir = import.meta.dirname;
-  const fs = require('fs') as typeof import('fs');
-  const path = require('path') as typeof import('path');
-  while (dir !== '/') {
-    if (fs.existsSync(`${dir}/neural/mix.exs`) && fs.existsSync(`${dir}/core/Cargo.toml`)) return dir;
-    dir = path.dirname(dir);
+async function waitForBrain(attempts = 10): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    if (await healthCheck()) return true;
+    await new Promise((r) => setTimeout(r, 1000));
   }
-  return import.meta.dirname;
+  return false;
 }
 
 main().catch((err) => { console.error('Fatal:', err); process.exit(1); });

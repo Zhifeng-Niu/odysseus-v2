@@ -20,8 +20,37 @@ export interface BrainContext {
 }
 
 let brainOnline = false;
-let lastCheckAt = 0;
-const RECHECK_INTERVAL = 30_000;
+
+export async function enrich(text: string, intensity = 0.5): Promise<BrainContext> {
+  if (!brainOnline) {
+    await probeBrain();
+    if (!brainOnline) {
+      throw new Error('Brain unavailable — start Elixir brain first (mix run --no-halt)');
+    }
+  }
+
+  try {
+    const res = await fetch(`${BRAIN_URL}/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, intensity }),
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) throw new Error(`Brain /enrich returned ${res.status}`);
+    return (await res.json()) as BrainContext;
+  } catch (err) {
+    brainOnline = false;
+    throw err;
+  }
+}
+
+export async function healthCheck(): Promise<boolean> {
+  return probeBrain();
+}
+
+export function isBrainOnline(): boolean {
+  return brainOnline;
+}
 
 async function probeBrain(): Promise<boolean> {
   try {
@@ -32,55 +61,4 @@ async function probeBrain(): Promise<boolean> {
     brainOnline = false;
     return false;
   }
-}
-
-async function isAvailable(): Promise<boolean> {
-  if (brainOnline) return true;
-  const now = Date.now();
-  if (now - lastCheckAt < RECHECK_INTERVAL) return false;
-  lastCheckAt = now;
-  return probeBrain();
-}
-
-export async function enrich(text: string, intensity = 0.5): Promise<BrainContext | null> {
-  if (!(await isAvailable())) return null;
-  try {
-    const res = await fetch(`${BRAIN_URL}/enrich`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, intensity }),
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as BrainContext;
-  } catch {
-    brainOnline = false;
-    return null;
-  }
-}
-
-export async function sendToBrain(text: string, intensity = 0.5): Promise<boolean> {
-  if (!(await isAvailable())) return false;
-  try {
-    const res = await fetch(`${BRAIN_URL}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, source: 'cli', intensity }),
-      signal: AbortSignal.timeout(3000),
-    });
-    brainOnline = res.ok;
-    return res.ok;
-  } catch {
-    brainOnline = false;
-    return false;
-  }
-}
-
-export async function healthCheck(): Promise<boolean> {
-  lastCheckAt = Date.now();
-  return probeBrain();
-}
-
-export function isBrainOnline(): boolean {
-  return brainOnline;
 }

@@ -2,10 +2,10 @@ import type { BrainModel } from '../llm.js';
 import { chat, type ChatMessage } from '../llm-client.js';
 import type { BrainContext } from '../brain-bridge.js';
 
-const SYSTEM_PROMPT = `You are the left hemisphere of Odysseus — analytical, logical, precise.
-Given emotional context, attention weights, and conversation history, provide a clear, well-reasoned response.
-Focus on facts, structure, step-by-step reasoning, and actionable conclusions.
-Be concise. If you detect code, bugs, or technical questions, prioritize accuracy.`;
+const SYSTEM_PROMPT = `You are Odysseus, an autonomous agent with a brain-inspired architecture.
+You receive signals enriched by emotional processing, memory, and attention allocation.
+Respond as a unified intelligence — balance analytical precision with intuitive depth.
+Be concise. Adapt your tone naturally to the context.`;
 
 export async function reason(
   model: BrainModel,
@@ -14,7 +14,7 @@ export async function reason(
   brainCtx: BrainContext | null,
 ): Promise<string> {
   const contextBlock = brainCtx
-    ? `\n\n[Brain Context]\nEmotion: valence=${brainCtx.emotion.valence.toFixed(2)} arousal=${brainCtx.emotion.arousal.toFixed(2)} threat=${brainCtx.emotion.threat.toFixed(2)} opportunity=${brainCtx.emotion.opportunity.toFixed(2)}\nAttention: ${JSON.stringify(brainCtx.attention)}\nPrimary lobe: ${brainCtx.primary_lobe}`
+    ? `\n\n[Brain State]\nEmotion: valence=${brainCtx.emotion.valence.toFixed(2)} arousal=${brainCtx.emotion.arousal.toFixed(2)} threat=${brainCtx.emotion.threat.toFixed(2)} opportunity=${brainCtx.emotion.opportunity.toFixed(2)}\nAttention: ${JSON.stringify(brainCtx.attention)}\nActive lobe: ${brainCtx.primary_lobe}\nFeatures: words=${brainCtx.features.word_count} question=${brainCtx.features.has_question} code=${brainCtx.features.has_code}`
     : '';
 
   const messages: ChatMessage[] = [

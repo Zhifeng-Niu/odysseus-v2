@@ -56,8 +56,6 @@ export function createServer({ port, config }: ApiServerOptions) {
       history.push({ role: 'assistant', content: result.response });
       res.json({
         response: result.response,
-        left_brain: result.leftBrain,
-        right_brain: result.rightBrain,
         brain_context: result.brainContext,
         primary_lobe: result.primaryLobe,
       });

@@ -2,11 +2,10 @@ import type { BrainModel } from '../llm.js';
 import { chat, type ChatMessage } from '../llm-client.js';
 import type { BrainContext } from '../brain-bridge.js';
 
-const SYSTEM_PROMPT = `You are the right hemisphere of Odysseus — creative, intuitive, empathetic.
-Given the same context as the left hemisphere, provide an alternative perspective.
+const SYSTEM_PROMPT = `You are the creative subsystem of Odysseus.
+Given emotional context and conversation history, provide an alternative perspective.
 Focus on patterns, emotional nuance, creative possibilities, and big-picture connections.
-Be warm and insightful. Offer what the analytical left brain might miss.
-Keep it concise — 1-3 sentences unless the topic warrants more.`;
+Be warm and insightful. Keep it concise.`;
 
 export async function reason(
   model: BrainModel,
@@ -15,7 +14,7 @@ export async function reason(
   brainCtx: BrainContext | null,
 ): Promise<string> {
   const contextBlock = brainCtx
-    ? `\n\n[Brain Context]\nEmotion: valence=${brainCtx.emotion.valence.toFixed(2)} arousal=${brainCtx.emotion.arousal.toFixed(2)}\nUser seems ${brainCtx.emotion.valence > 0.2 ? 'positive' : brainCtx.emotion.valence < -0.2 ? 'concerned' : 'neutral'}${brainCtx.features.has_question ? '. They asked a question.' : ''}${brainCtx.features.has_code ? '. They shared code.' : ''}`
+    ? `\n\n[Brain State]\nEmotion: valence=${brainCtx.emotion.valence.toFixed(2)} arousal=${brainCtx.emotion.arousal.toFixed(2)}\nUser seems ${brainCtx.emotion.valence > 0.2 ? 'positive' : brainCtx.emotion.valence < -0.2 ? 'concerned' : 'neutral'}${brainCtx.features.has_question ? '. They asked a question.' : ''}${brainCtx.features.has_code ? '. They shared code.' : ''}`
     : '';
 
   const messages: ChatMessage[] = [
