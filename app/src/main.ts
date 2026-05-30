@@ -2,7 +2,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import React from 'react';
 import { render, Box, Text, useApp, useInput, useStdout } from 'ink';
-import { loadConfig, type LLMConfig } from './llm.js';
+import { loadConfig, saveConfig, type LLMConfig } from './llm.js';
 import type { ChatMessage } from './llm-client.js';
 import * as orchestrator from './frontal-orchestrator/index.js';
 import { enrich, healthCheck, isBrainOnline } from './brain-bridge.js';
@@ -155,7 +155,13 @@ function ChatUI({ initialState, config }: {
         update({ messages: [], chatHistory: [] });
         return;
       case 'help':
-        addMsg('system', '/model /status /clear /init /help /exit');
+        addMsg('system', '/model /config /status /clear /init /help /exit');
+        break;
+      case 'config':
+        addMsg('system', 'Re-running setup wizard...');
+        update({ messages: [...state.messages] });
+        exit();
+        return;
         break;
       case 'init':
         exit();
