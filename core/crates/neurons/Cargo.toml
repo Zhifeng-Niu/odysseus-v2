@@ -1,0 +1,15 @@
+[package]
+name = "odysseus_neurons"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "odysseus_neurons"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+signal_types = { path = "../signal_types" }
+sparse_matrix = { path = "../sparse_matrix" }
+rustler = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

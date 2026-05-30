@@ -1,0 +1,31 @@
+{
+  "name": "@odysseus/v2-app",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "ody": "./bin/ody.mjs"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node bin/ody.mjs",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ink": "^7.0.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.0.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.22.3",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,7 @@
+[package]
+name = "sparse_matrix"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }

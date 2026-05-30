@@ -1,0 +1,13 @@
+[package]
+name = "signal_types"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+rustler = { workspace = true, optional = true }
+
+[features]
+default = ["nif"]
+nif = ["rustler"]

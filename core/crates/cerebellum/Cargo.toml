@@ -1,0 +1,13 @@
+[package]
+name = "odysseus_cerebellum"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "odysseus_cerebellum"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+signal_types = { path = "../signal_types" }
+rustler = { workspace = true }
+serde = { workspace = true }

@@ -1,0 +1,29 @@
+# Rust
+core/target/
+
+# Elixir
+neural/_build/
+neural/deps/
+neural/.elixir_ls/
+neural/priv/
+
+# Node
+app/node_modules/
+app/dist/
+
+# NIF binaries
+*.dylib
+*.so
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem

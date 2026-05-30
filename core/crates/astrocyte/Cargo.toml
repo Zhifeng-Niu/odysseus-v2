@@ -1,0 +1,12 @@
+[package]
+name = "odysseus_astrocyte"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "odysseus_astrocyte"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rustler = { workspace = true }
+serde = { workspace = true }
