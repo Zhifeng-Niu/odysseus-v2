@@ -24,7 +24,10 @@ defmodule Odysseus.Cerebellum.Nif do
       {:error, _} -> :ok
       priv ->
         path = Path.join([to_string(priv), "libodysseus_cerebellum"])
-        :erlang.load_nif(String.to_charlist(path), 0)
+        case :erlang.load_nif(String.to_charlist(path), 0) do
+        :ok -> :ok
+        {:error, _} -> :ok
+      end
     end
   end
 

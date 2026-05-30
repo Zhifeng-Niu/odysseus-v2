@@ -19,7 +19,7 @@ defmodule Odysseus.Brain.Router do
     send_json(conn, 200, %{
       status: "running",
       nifs_loaded: nif_status(),
-      uptime: System.system_time(:second) - elem(:erlang.statistics(:start_time), 0)
+      uptime: elem(:erlang.statistics(:wall_clock), 0) |> div(1000)
     })
   end
 
